@@ -66,7 +66,7 @@ class SingleImage:
 
     def show_img(self):
         cv2.imshow('img',self.img)
-        cv2.waitKey(1000/24)
+        cv2.waitKey(1000//24)
 
 if __name__ == "__main__":
     connection = SocketClient(host, port)

@@ -86,9 +86,12 @@ class SocketServer:
 
     def client_handler(self, addr):
         print("this is a client handler:", addr)
-        npy_depth = cv2.imread('Gray_Image.jpg', 0)
+        npy_depth = cv2.imread('1520468813.npy', 0)
+        cam = cv2.VideoCapture(0)
         h, w = npy_depth.shape
         while True:
+            ret, npy_depth = cam.read()
+            npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
             try:
                 self.clients[addr].send(struct.pack("I", int(h)))
                 self.clients[addr].send(struct.pack("I", int(w)))
