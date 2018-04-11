@@ -46,24 +46,26 @@ def compress_img(image):
 
 if __name__ == "__main__":
     connection = SocketProducer(host, port)
+    # npy_depth = cv2.imread('Gray_Image.jpg', 0)
+    cam = cv2.VideoCapture(0)
     while True:
-        npy_depth = np.load('1520468813.npy')
+        ret, npy_depth = cam.read()
+        npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
         h, w = npy_depth.shape
         try:
-
-            connection.s.send(struct.pack("I", int(h)))
-            connection.s.send(struct.pack("I", int(w)))
+            connection.send(h)
+            connection.send(w)
             # TODO compress the image
-            message = compress_img(npy_depth)
-            connection.s.send(struct.pack("I", int(message.size)))
+            message = np.reshape(npy_depth, (1, -1))[0]
+            connection.send(message.size)
             # connection.s.send(bytearray([self.L_value]))
 
             # send the image
             value = bytearray(message)
+            print(npy_depth)
             connection.s.sendall(value)
         except BrokenPipeError as e:
-            connection.statusBar().showMessage(str(e))
-            connection.s.close()
+            print(e)
 
 
         #     b_data += connection.receive_with_length(BUFFER_SIZE)

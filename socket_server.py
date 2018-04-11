@@ -10,6 +10,7 @@ host = "localhost"
 port = 60000
 TYPE_PRODUCER = 0
 TYPE_CLIENT = 1
+BUFFER_SIZE = 1024
 
 
 class SocketServer:
@@ -20,6 +21,7 @@ class SocketServer:
         self.conns = {}
         self.clients = {}
         self.producer = {}
+        self.connection_list_updated = False
 
         try:
             self.s.bind((host, port))  # Bind to the port
@@ -48,16 +50,25 @@ class SocketServer:
 
             time.sleep(1)
 
+    def receive_with_length(self, length, addr):
+        data = self.conns[addr].recv(length)
+        return data
+
     def broadcast(self, data):
-        for k, v in self.conns:
+        # TODO need to handle unsubscribe
+        for k, v in self.clients.items():
             v.send(data)
 
     def subscribe(self, addr):
-        self.clients[addr] = self.conns[addr]
+        self.new_clients = self.clients.copy()
+        self.new_clients[addr] = self.conns[addr]
+        self.connection_list_updated = True
 
     def unsubscribe(self, addr):
         del self.conns[addr]
-        del self.producer[addr]
+        self.new_clients = self.clients.copy()
+        del self.new_clients[addr]
+        self.connection_list_updated = True
 
     def receive_header(self, addr):
         data = self.conns[addr].recv(4)
@@ -86,32 +97,37 @@ class SocketServer:
 
     def client_handler(self, addr):
         print("this is a client handler:", addr)
-        npy_depth = cv2.imread('1520468813.npy', 0)
-        cam = cv2.VideoCapture(0)
-        h, w = npy_depth.shape
-        while True:
-            ret, npy_depth = cam.read()
-            npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
-            try:
-                self.clients[addr].send(struct.pack("I", int(h)))
-                self.clients[addr].send(struct.pack("I", int(w)))
-                # TODO compress the image
-                message = np.reshape(npy_depth, (1, -1))[0]
-                self.clients[addr].send(struct.pack("I", int(message.size)))
-                # connection.s.send(bytearray([self.L_value]))
-
-                # send the image
-                value = bytearray(message)
-                print(npy_depth)
-                self.clients[addr].sendall(value)
-            except BrokenPipeError as e:
-                print(e)
-                del self.conns[addr]
-                del self.clients[addr]
         # TODO if client is not reachable, remove it from the clients dict
 
     def producer_handler(self, addr):
         print("this is a producer handler:", addr)
+        while True:
+            h = self.receive_with_length(4, addr)
+            self.broadcast(h)
+            h = struct.unpack("I", h)[0]
+            w = self.receive_with_length(4, addr)
+            self.broadcast(w)
+            w = struct.unpack("I", w)[0]
+            print(h, w)
+            size = self.receive_with_length(4, addr)
+            self.broadcast(size)
+            size = struct.unpack("I", size)[0]
+
+            b_data = b''
+            while len(b_data) < size:
+                if len(b_data) + BUFFER_SIZE < size:
+                    temp = self.receive_with_length(BUFFER_SIZE, addr)
+                    self.broadcast(temp)
+                    b_data += temp
+                else:
+                    temp = self.receive_with_length(size - len(b_data), addr)
+                    self.broadcast(temp)
+                    b_data += temp
+
+            if self.connection_list_updated:
+                self.clients = self.new_clients.copy()
+                self.connection_list_updated = False
+
         # TODO Use while loop to 1. receive image 2. send to client 3. machine learning 4. send instruction to robot
         # while True:
 
