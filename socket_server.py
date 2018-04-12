@@ -3,7 +3,6 @@ import _thread
 import numpy as np
 import cv2
 import logging
-import asyncore
 
 host = "localhost"
 # host = "192.168.0.17"
@@ -22,7 +21,8 @@ class SocketServer:
         self.clients = {}
         self.producer = {}
         self.connection_list_updated = False
-
+        self.new_clients = {}
+        self.rm_clients = {}
         try:
             self.s.bind((host, port))  # Bind to the port
             print("Server established.")
@@ -51,24 +51,44 @@ class SocketServer:
             time.sleep(1)
 
     def receive_with_length(self, length, addr):
-        data = self.conns[addr].recv(length)
-        return data
+        received_data = self.conns[addr].recv(length)
+        return received_data
 
     def broadcast(self, data):
         # TODO need to handle unsubscribe
+        self.update_subscribe_list()
         for k, v in self.clients.items():
-            v.send(data)
+            try:
+                v.send(data)
+            except ConnectionError as e:
+                print(str(e))
+                self.unsubscribe(k)
+                continue
 
     def subscribe(self, addr):
-        self.new_clients = self.clients.copy()
-        self.new_clients[addr] = self.conns[addr]
-        self.connection_list_updated = True
+            self.new_clients[addr] = self.conns[addr]
+            self.connection_list_updated = True
 
     def unsubscribe(self, addr):
+        self.rm_clients[addr] = self.conns[addr]
         del self.conns[addr]
-        self.new_clients = self.clients.copy()
-        del self.new_clients[addr]
         self.connection_list_updated = True
+
+    def update_subscribe_list(self):
+        if self.connection_list_updated:
+            self.clients.update(self.new_clients)
+            all(map(self.clients.pop, self.rm_clients))
+            self.new_clients = {}
+            self.rm_clients = {}
+            self.connection_list_updated = False
+            print("Number of clients conns", len(self.new_clients))
+            print("Number of producer conns", len(self.producer))
+
+    def producer_removed(self, addr):
+        del self.conns[addr]
+        del self.producer[addr]
+        print("Number of clients conns", len(self.new_clients))
+        print("Number of producer conns", len(self.producer))
 
     def receive_header(self, addr):
         data = self.conns[addr].recv(4)
@@ -78,15 +98,9 @@ class SocketServer:
             if conn_type == TYPE_PRODUCER:
                 self.producer[addr] = self.conns[addr]
                 self.producer_handler(addr)
-                print("Number of clients conns", len(self.clients))
-                print("Number of producer conns", len(self.producer))
             elif conn_type == TYPE_CLIENT:
                 self.subscribe(addr)
-                print("Number of clients conns", len(self.clients))
-                print("Number of producer conns", len(self.producer))
                 self.client_handler(addr)
-                print("Number of clients conns", len(self.clients))
-                print("Number of producer conns", len(self.producer))
             else:
                 del self.conns[addr]
         else:
@@ -97,36 +111,41 @@ class SocketServer:
 
     def client_handler(self, addr):
         print("this is a client handler:", addr)
-        # TODO if client is not reachable, remove it from the clients dict
 
     def producer_handler(self, addr):
         print("this is a producer handler:", addr)
+
         while True:
-            h = self.receive_with_length(4, addr)
-            self.broadcast(h)
-            h = struct.unpack("I", h)[0]
-            w = self.receive_with_length(4, addr)
-            self.broadcast(w)
-            w = struct.unpack("I", w)[0]
-            print(h, w)
-            size = self.receive_with_length(4, addr)
-            self.broadcast(size)
-            size = struct.unpack("I", size)[0]
+            try:
+                self.update_subscribe_list()
 
-            b_data = b''
-            while len(b_data) < size:
-                if len(b_data) + BUFFER_SIZE < size:
-                    temp = self.receive_with_length(BUFFER_SIZE, addr)
-                    self.broadcast(temp)
-                    b_data += temp
-                else:
-                    temp = self.receive_with_length(size - len(b_data), addr)
-                    self.broadcast(temp)
-                    b_data += temp
+                h = self.receive_with_length(4, addr)
+                self.broadcast(h)
+                w = self.receive_with_length(4, addr)
+                self.broadcast(w)
+                size = self.receive_with_length(4, addr)
+                self.broadcast(size)
 
-            if self.connection_list_updated:
-                self.clients = self.new_clients.copy()
-                self.connection_list_updated = False
+                h = struct.unpack("I", h)[0]
+                w = struct.unpack("I", w)[0]
+                size = struct.unpack("I", size)[0]
+                print(h, w)
+                b_data = b''
+                while len(b_data) < size:
+                    if len(b_data) + BUFFER_SIZE < size:
+                        temp = self.receive_with_length(BUFFER_SIZE, addr)
+                        self.broadcast(temp)
+                        b_data += temp
+                    else:
+                        temp = self.receive_with_length(size - len(b_data), addr)
+                        self.broadcast(temp)
+                        b_data += temp
+
+            except ConnectionError as e:
+                print(str(e))
+                self.producer_removed(addr)
+                self.update_subscribe_list()
+                break
 
         # TODO Use while loop to 1. receive image 2. send to client 3. machine learning 4. send instruction to robot
         # while True:
