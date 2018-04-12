@@ -81,7 +81,7 @@ class SingleImage:
             connection.disconnect()
 
     def construct_img(self):
-        # TODO This needs to be implement later, based on how we encode the image
+        # TODO This needs to be implement later, based on how we encode/compress the image
         self.img = np.reshape(self.raw_img, (self.h, self.w))
         self.img = self.img.astype(np.uint8)
 
@@ -94,6 +94,7 @@ if __name__ == "__main__":
 
     connection = SocketClient(host, port)
     connection.s.settimeout(1)
+    # TODO Add GUI for change view options (3d RGB) and quality
     # TODO Create renderer, render window, etc for VTK
     # TODO 1.transform image to point cloud 2.vtk render
     while connection.status:

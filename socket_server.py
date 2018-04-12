@@ -55,7 +55,6 @@ class SocketServer:
         return received_data
 
     def broadcast(self, data):
-        # TODO need to handle unsubscribe
         self.update_subscribe_list()
         for k, v in self.clients.items():
             try:
