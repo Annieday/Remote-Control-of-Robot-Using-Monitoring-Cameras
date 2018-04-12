@@ -20,7 +20,8 @@ class SocketServer:
         self.conns = {}
         self.clients = {}
         self.producer = {}
-        self.connection_list_updated = False
+        self.client_subscribed = False
+        self.client_unsubscribed = False
         self.new_clients = {}
         self.rm_clients = {}
         try:
@@ -55,7 +56,9 @@ class SocketServer:
         return received_data
 
     def broadcast(self, data):
-        self.update_subscribe_list()
+        if self.client_unsubscribed:
+            self.update_subscribe_list_remove()
+
         for k, v in self.clients.items():
             try:
                 v.send(data)
@@ -65,21 +68,31 @@ class SocketServer:
                 continue
 
     def subscribe(self, addr):
-            self.new_clients[addr] = self.conns[addr]
-            self.connection_list_updated = True
+        self.new_clients[addr] = self.conns[addr]
+        self.client_subscribed = True
 
     def unsubscribe(self, addr):
         self.rm_clients[addr] = self.conns[addr]
         del self.conns[addr]
-        self.connection_list_updated = True
+        self.client_unsubscribed = True
 
-    def update_subscribe_list(self):
-        if self.connection_list_updated:
+    def update_subscribe_list_all(self):
+        self.update_subscribe_list_add()
+        self.update_subscribe_list_remove()
+
+    def update_subscribe_list_add(self):
+        if self.client_subscribed:
             self.clients.update(self.new_clients)
-            all(map(self.clients.pop, self.rm_clients))
             self.new_clients = {}
+            self.client_subscribed = False
+            print("Number of clients conns", len(self.new_clients))
+            print("Number of producer conns", len(self.producer))
+
+    def update_subscribe_list_remove(self):
+        if self.client_unsubscribed:
+            all(map(self.clients.pop, self.rm_clients))
             self.rm_clients = {}
-            self.connection_list_updated = False
+            self.client_unsubscribed = False
             print("Number of clients conns", len(self.new_clients))
             print("Number of producer conns", len(self.producer))
 
@@ -116,14 +129,14 @@ class SocketServer:
 
         while True:
             try:
-                self.update_subscribe_list()
-
+                b_data = b''
                 h = self.receive_with_length(4, addr)
-                self.broadcast(h)
                 w = self.receive_with_length(4, addr)
-                self.broadcast(w)
                 size = self.receive_with_length(4, addr)
-                self.broadcast(size)
+                b_data += h
+                b_data += w
+                b_data += size
+                self.broadcast(b_data)
 
                 h = struct.unpack("I", h)[0]
                 w = struct.unpack("I", w)[0]
@@ -139,11 +152,11 @@ class SocketServer:
                         temp = self.receive_with_length(size - len(b_data), addr)
                         self.broadcast(temp)
                         b_data += temp
-
+                self.update_subscribe_list_all()
             except ConnectionError as e:
                 print(str(e))
                 self.producer_removed(addr)
-                self.update_subscribe_list()
+                self.update_subscribe_list_all()
                 break
 
         # TODO Use while loop to 1. receive image 2. send to client 3. machine learning 4. send instruction to robot
