@@ -51,6 +51,7 @@ class SingleImage:
         self.raw_img = None
         self.img = None
 
+
     # def receive_header(self):
     #     h = c
     #     w = connection.receive_with_length(4)
