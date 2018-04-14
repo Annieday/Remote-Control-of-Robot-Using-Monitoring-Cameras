@@ -14,6 +14,10 @@ TYPE = 1
 BUFFER_SIZE = 1024
 vtk_actor = None
 
+QUALITY_LOW = 0
+QUALITY_MEDIUM = 1
+QUALITY_HIGH = 2
+
 class SocketClient:
     def __init__(self, host, port=60000):
         self.s = socket.socket()
@@ -24,6 +28,7 @@ class SocketClient:
             self.s.connect((host, port))
             print("Connected to server", host, "port", port)
             self.send(TYPE)
+            self.send(QUALITY_HIGH)
             self.status = True
 
         except ConnectionRefusedError as e:
@@ -31,7 +36,7 @@ class SocketClient:
             self.status = False
 
     def send(self, data):
-        print(struct.pack("I", int(data)))
+        print("sending", struct.pack("I", int(data)))
         self.s.send(struct.pack("I", int(data)))
 
     def receive_with_length(self, length):
