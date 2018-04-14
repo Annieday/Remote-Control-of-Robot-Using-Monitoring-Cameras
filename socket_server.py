@@ -6,7 +6,7 @@ import logging
 
 host = "localhost"
 # host = "192.168.0.17"
-port = 60001
+port = 60000
 
 TYPE_PRODUCER = 0
 TYPE_CLIENT = 1
@@ -20,6 +20,7 @@ CLIENT_REQUEST_QUALITY_CHANGE = 0
 CLIENT_REQUEST_VTK = 1
 CLIENT_REQUEST_RGB = 2
 CLIENT_REQUEST_GREY = 3
+
 
 # https://stackoverflow.com/questions/287871/print-in-terminal-with-colors
 class BColor:
@@ -65,6 +66,7 @@ class BColor:
 
 class Channel:
     """ A channel within SocketServer """
+
     def __init__(self, quality):
         self.producer_conn = None
         self.producer_addr = None
@@ -76,13 +78,13 @@ class Channel:
         self.producer_conn = conn
         self.producer_addr = addr
         self.is_producing = True
-        logger.info(BColor.green("Channel "+str(self.channel_id)+" got producer: "+str(addr)))
+        logger.info(BColor.green("Channel " + str(self.channel_id) + " got producer: " + str(addr)))
 
     def receive_with_length(self, length):
         received_data = self.producer_conn.recv(length)
-        if len(received_data)==0:
+        if len(received_data) == 0:
             self.is_producing = False
-            raise Exception("Loss producer "+str(self.producer_addr))
+            raise ConnectionError("Loss producer " + str(self.producer_addr))
         return received_data
 
     def broadcast(self, clients, data):
@@ -91,7 +93,7 @@ class Channel:
             try:
                 conn.send(data)
             except ConnectionError as e:
-                logger.info(BColor.yellow("Lose client ")+str(addr)+" "+BColor.red(str(e)))
+                logger.info(BColor.yellow("Lose client ") + str(addr) + " " + BColor.red(str(e)))
                 deleted_addrs.append(addr)
                 self.unsubscribe(addr)
 
@@ -100,24 +102,23 @@ class Channel:
             del clients[addr]
 
     def subscribe(self, conn, addr):
-        logger.info("Added subscriber from "+
-                     BColor.green(str(addr))+
-                     " to channel "+
-                     BColor.green(str(self.channel_id)))
+        logger.info("Added subscriber from " +
+                    BColor.green(str(addr)) +
+                    " to channel " +
+                    BColor.green(str(self.channel_id)))
         self.subscribers[addr] = conn
         # self.is_new_subscirbe = True
 
     def unsubscribe(self, addr):
         try:
             del self.subscribers[addr]
-            logger.info("Deleted subscriber "+
-                          BColor.yellow(str(addr))+
-                          " from channel "+
-                          BColor.yellow(str(self.channel_id)))
+            logger.info("Deleted subscriber " +
+                        BColor.yellow(str(addr)) +
+                        " from channel " +
+                        BColor.yellow(str(self.channel_id)))
         except KeyError:
             # already unsubscribed
             pass
-
 
     def producer_handler(self):
         print("this is a producer handler:", self.producer_addr)
@@ -152,11 +153,9 @@ class Channel:
                 # TODO 3. machine learning based on selected quality that's hard coded
                 # TODO 4. send instruction to robot
                 # self.update_subscribe_list_all()
-            except Exception as e:
-                logger.info(BColor.cyan("Channel "+str(self.channel_id)+" error: "+str(e)))
+            except ConnectionError as e:
+                logger.info(BColor.cyan("Channel " + str(self.channel_id) + " error: " + str(e)))
                 break
-
-
 
 
 class SocketServer:
@@ -169,11 +168,11 @@ class SocketServer:
         self.running = False
         try:
             self.s.bind((host, port))  # Bind to the port
-            logger.info(BColor.green("Server established. Host: "+host+"port: "+str(port)))
+            logger.info(BColor.green("Server established. Host: " + host + "port: " + str(port)))
             self.running = True
 
         except Exception as e:
-            logger.error("Server establish error. Host: "+host+"port: "+str(port)+" "+BColor.red(str(e)))
+            logger.error("Server establish error. Host: " + host + "port: " + str(port) + " " + BColor.red(str(e)))
 
     def run_server(self):
         print("Server awaiting for client to connect ...")
@@ -182,7 +181,7 @@ class SocketServer:
 
         while True:
             conn, addr = self.s.accept()  # Establish connection with client.
-            logger.info('Got connection from '+str(addr))
+            logger.info('Got connection from ' + str(addr))
 
             self.conns[addr] = conn
 
@@ -198,10 +197,10 @@ class SocketServer:
 
     def initialize_handshake(self, conn, addr):
         handshake_lenth = 8
-        data = conn.recv(handshake_lenth) # receive the conn_type
+        data = conn.recv(handshake_lenth)  # receive the conn_type
         if len(data) == handshake_lenth:
-            conn_type = struct.unpack("I", data[:4])[0] # extract the conn_type
-            quality = struct.unpack("I", data[4:])[0] # extract the quality
+            conn_type = struct.unpack("I", data[:4])[0]  # extract the conn_type
+            quality = struct.unpack("I", data[4:])[0]  # extract the quality
             print("receives from connection", addr, "with type:", conn_type, "quality:", quality)
 
             if conn_type == TYPE_PRODUCER or conn_type == TYPE_CLIENT:
@@ -209,7 +208,7 @@ class SocketServer:
                     channel = self.channels[quality]
                 except KeyError as e:
                     # The channel is not exist, yet.
-                    self.channels[quality] = Channel(quality) # create a channel
+                    self.channels[quality] = Channel(quality)  # create a channel
 
                 if conn_type == TYPE_PRODUCER:
                     self.channels[quality].setProducer(conn, addr)
@@ -219,7 +218,7 @@ class SocketServer:
                     self.channels[quality].subscribe(conn, addr)
                     self.client_handler(addr)
 
-            else: # unknow conn_type shut it donw
+            else:  # unknow conn_type shut it donw
                 conn.close()
                 del conn
                 del self.conns[addr]
@@ -232,7 +231,6 @@ class SocketServer:
         print("this is a client handler:", addr)
         # TODO use while loop to receive request and handle them
         # while True:
-
 
 
 if __name__ == "__main__":
