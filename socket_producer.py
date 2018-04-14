@@ -72,19 +72,19 @@ def send_img(conn, img, h, w):
     except Exception as e:
         print(str(e))
         conn.status = False
-        conn.disconnect()
+        del conn
         return
 
 
 if __name__ == "__main__":
     connection[QUALITY_HIGH] = SocketProducer(host, port, QUALITY_HIGH)
-    connection[QUALITY_MEDIUM] = SocketProducer(host, port, QUALITY_MEDIUM)
-    connection[QUALITY_LOW] = SocketProducer(host, port, QUALITY_LOW)
+    # connection[QUALITY_MEDIUM] = SocketProducer(host, port, QUALITY_MEDIUM)
+    # connection[QUALITY_LOW] = SocketProducer(host, port, QUALITY_LOW)
 
     # npy_depth = cv2.imread('Gray_Image.jpg', 0)
     cam = cv2.VideoCapture(0)
-    # while connection[QUALITY_MEDIUM].status:
-    while connection[QUALITY_LOW].status or connection[QUALITY_MEDIUM].status or connection[QUALITY_HIGH].status:
+    while connection[QUALITY_HIGH].status:
+    # while connection[QUALITY_LOW].status or connection[QUALITY_MEDIUM].status or connection[QUALITY_HIGH].status:
         ret, npy_depth = cam.read()
         npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
         h, w = npy_depth.shape

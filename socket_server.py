@@ -6,7 +6,7 @@ import logging
 
 host = "localhost"
 # host = "192.168.0.17"
-port = 60000
+port = 60001
 
 TYPE_PRODUCER = 0
 TYPE_CLIENT = 1
@@ -21,75 +21,109 @@ CLIENT_REQUEST_VTK = 1
 CLIENT_REQUEST_RGB = 2
 CLIENT_REQUEST_GREY = 3
 
-conns = {}
-producer = {}
-subscriber = {}
-subscriber[QUALITY_LOW] = {}
-subscriber[QUALITY_MEDIUM] = {}
-subscriber[QUALITY_HIGH] = {}
+# https://stackoverflow.com/questions/287871/print-in-terminal-with-colors
+class BColor:
+    ## color codes
+    CYAN = '\033[96m'
+    PURPLE = '\033[95m'
+    BLUE = '\033[94m'
+    YELLOW = '\033[93m'
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    DARK_CYAN = '\033[36m'
+    DARK_PURPLE = '\033[35m'
+    DARK_BLUE = '\033[34m'
+    DARK_YELLOW = '\033[33m'
+    DARK_GREEN = '\033[32m'
+    DARK_RED = '\033[31m'
+
+    ## sytle codes
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+    def style(header, string):
+        """ Adds a style header to string. """
+        return header + string + BColor.ENDC
+
+    def green(string):
+        """ Turns a string green. """
+        return BColor.style(BColor.GREEN, string)
+
+    def red(string):
+        """ Turns a string red. """
+        return BColor.style(BColor.RED, string)
+
+    def yellow(string):
+        """ Turns a string blue. """
+        return BColor.style(BColor.YELLOW, string)
+
+    def cyan(string):
+        """ Turns a string blue. """
+        return BColor.style(BColor.CYAN, string)
 
 
-class Producer:
-    def __init__(self, conn, addr, quality):
-        self.conn = conn
-        self.addr = addr
-        self.quality = quality
-        self.client_subscribed = False
-        self.client_unsubscribed = False
-        self.new_clients = {}
-        self.rm_clients = {}
+class Channel:
+    """ A channel within SocketServer """
+    def __init__(self, quality):
+        self.producer_conn = None
+        self.producer_addr = None
+        self.is_producing = False
+        self.channel_id = quality
+        self.subscribers = {}
+
+    def setProducer(self, conn, addr):
+        self.producer_conn = conn
+        self.producer_addr = addr
+        self.is_producing = True
+        logger.info(BColor.green("Channel "+str(self.channel_id)+" got producer: "+str(addr)))
 
     def receive_with_length(self, length):
-        received_data = self.conn.recv(length)
+        received_data = self.producer_conn.recv(length)
+        if len(received_data)==0:
+            self.is_producing = False
+            raise Exception("Loss producer "+str(self.producer_addr))
         return received_data
 
-    def broadcast(self, data):
-        if self.client_unsubscribed:
-            self.update_subscribe_list_remove()
-
-        for k, v in subscriber[self.quality].items():
+    def broadcast(self, clients, data):
+        deleted_addrs = []
+        for addr, conn in clients.items():
             try:
-                v.send(data)
+                conn.send(data)
             except ConnectionError as e:
-                print(str(e))
-                self.unsubscribe(k)
-                del conns[k]
-                continue
+                logger.info(BColor.yellow("Lose client ")+str(addr)+" "+BColor.red(str(e)))
+                deleted_addrs.append(addr)
+                self.unsubscribe(addr)
 
-    def subscribe(self, addr):
-        self.new_clients[addr] = conns[addr]
-        self.client_subscribed = True
+        # delete all the broken pipes
+        for addr in deleted_addrs:
+            del clients[addr]
+
+    def subscribe(self, conn, addr):
+        logger.info("Added subscriber from "+
+                     BColor.green(str(addr))+
+                     " to channel "+
+                     BColor.green(str(self.channel_id)))
+        self.subscribers[addr] = conn
+        # self.is_new_subscirbe = True
 
     def unsubscribe(self, addr):
-        self.rm_clients[addr] = conns[addr]
-        self.client_unsubscribed = True
+        try:
+            del self.subscribers[addr]
+            logger.info("Deleted subscriber "+
+                          BColor.yellow(str(addr))+
+                          " from channel "+
+                          BColor.yellow(str(self.channel_id)))
+        except KeyError:
+            # already unsubscribed
+            pass
 
-    def update_subscribe_list_all(self):
-        self.update_subscribe_list_add()
-        self.update_subscribe_list_remove()
-
-    def update_subscribe_list_add(self):
-        if self.client_subscribed:
-            subscriber[self.quality].update(self.new_clients)
-            self.new_clients = {}
-            self.client_subscribed = False
-            print("Number of clients conns", len(subscriber[self.quality]))
-
-    def update_subscribe_list_remove(self):
-        if self.client_unsubscribed:
-            all(map(subscriber[self.quality].pop, self.rm_clients))
-            self.rm_clients = {}
-            self.client_unsubscribed = False
-            print("Number of clients conns", len(subscriber[self.quality]))
-
-    def producer_removed(self):
-        del conns[self.addr]
-        del producer[self.quality]
-        print("Number of clients conns", len(subscriber[self.quality]))
 
     def producer_handler(self):
-        print("this is a producer handler:", self.addr)
+        print("this is a producer handler:", self.producer_addr)
         while True:
+            clients = self.subscribers.copy()
+
             try:
                 b_data = b''
                 h = self.receive_with_length(4)
@@ -98,95 +132,101 @@ class Producer:
                 b_data += h
                 b_data += w
                 b_data += size
-                self.broadcast(b_data)
+                self.broadcast(clients, b_data)
 
                 h = struct.unpack("I", h)[0]
                 w = struct.unpack("I", w)[0]
                 size = struct.unpack("I", size)[0]
-                print(h, w, size, self.quality)
+                # print(h, w, size, self.quality)
                 b_data = b''
                 while len(b_data) < size:
                     if len(b_data) + BUFFER_SIZE < size:
                         temp = self.receive_with_length(BUFFER_SIZE)
-                        self.broadcast(temp)
+                        self.broadcast(clients, temp)
                         b_data += temp
                     else:
                         temp = self.receive_with_length(size - len(b_data))
-                        self.broadcast(temp)
+                        self.broadcast(clients, temp)
                         b_data += temp
 
                 # TODO 3. machine learning based on selected quality that's hard coded
                 # TODO 4. send instruction to robot
-                self.update_subscribe_list_all()
-            except ConnectionError as e:
-                print(str(e))
-                self.update_subscribe_list_all()
-                self.producer_removed()
+                # self.update_subscribe_list_all()
+            except Exception as e:
+                logger.info(BColor.cyan("Channel "+str(self.channel_id)+" error: "+str(e)))
                 break
 
 
+
+
 class SocketServer:
-    def __init__(self, host, port=60000):
+    def __init__(self, host='localhost', port=60000):
         self.s = socket.socket()  # Create a socket object
         self.host = host
         self.port = port
+        self.conns = {}
+        self.channels = {}
+        self.running = False
         try:
             self.s.bind((host, port))  # Bind to the port
-            print("Server established.")
+            logger.info(BColor.green("Server established. Host: "+host+"port: "+str(port)))
+            self.running = True
 
         except Exception as e:
-            print(str(e))
+            logger.error("Server establish error. Host: "+host+"port: "+str(port)+" "+BColor.red(str(e)))
 
     def run_server(self):
         print("Server awaiting for client to connect ...")
 
         self.s.listen(5)  # Now wait for client connection.
-        self.awaiting_connection()
 
-    def awaiting_connection(self):
         while True:
             conn, addr = self.s.accept()  # Establish connection with client.
-            print('Got connection from', addr)
+            logger.info('Got connection from '+str(addr))
 
-            conns[addr] = conn
+            self.conns[addr] = conn
 
-            _thread.start_new_thread(self.receive_header, (addr,))
+            _thread.start_new_thread(self.initialize_handshake, (conn, addr,))
 
-            # self.receive_header(addr)
-            print("Number of conns", len(conns))
+            # print("Number of conns", len(conns))
 
             time.sleep(1)
 
-    def receive_with_length(self, length, addr):
-        received_data = conns[addr].recv(length)
-        return received_data
+    # def receive_with_length(self, length, addr):
+    #     received_data = conns[addr].recv(length)
+    #     return received_data
 
-    def receive_header(self, addr):
-        data = conns[addr].recv(4)
-        if len(data) == 4:
-            conn_type = struct.unpack("I", data)[0]
-            print("receives from connection", addr, "with type:", conn_type)
-            if conn_type == TYPE_PRODUCER:
-                data = conns[addr].recv(4)
-                if len(data) == 4:
-                    quality = struct.unpack("I", data)[0]
-                    producer[quality] = Producer(conns[addr], addr, quality)
-                    producer[quality].producer_handler()
-                else:
-                    del conns[addr]
-            elif conn_type == TYPE_CLIENT:
-                if len(producer) == 0:
-                    subscriber[QUALITY_HIGH][addr] = conns[addr]
-                else:
-                    producer[QUALITY_HIGH].subscribe(addr)
-                self.client_handler(addr)
-            else:
-                del conns[addr]
+    def initialize_handshake(self, conn, addr):
+        handshake_lenth = 8
+        data = conn.recv(handshake_lenth) # receive the conn_type
+        if len(data) == handshake_lenth:
+            conn_type = struct.unpack("I", data[:4])[0] # extract the conn_type
+            quality = struct.unpack("I", data[4:])[0] # extract the quality
+            print("receives from connection", addr, "with type:", conn_type, "quality:", quality)
+
+            if conn_type == TYPE_PRODUCER or conn_type == TYPE_CLIENT:
+                try:
+                    channel = self.channels[quality]
+                except KeyError as e:
+                    # The channel is not exist, yet.
+                    self.channels[quality] = Channel(quality) # create a channel
+
+                if conn_type == TYPE_PRODUCER:
+                    self.channels[quality].setProducer(conn, addr)
+                    self.channels[quality].producer_handler()
+
+                elif conn_type == TYPE_CLIENT:
+                    self.channels[quality].subscribe(conn, addr)
+                    self.client_handler(addr)
+
+            else: # unknow conn_type shut it donw
+                conn.close()
+                del conn
+                del self.conns[addr]
         else:
-            del conns[addr]
-
-        # self.conns[addr].send(data)
-        # print(data)
+            # handshake error
+            conn.close()
+            del conn
 
     def client_handler(self, addr):
         print("this is a client handler:", addr)
@@ -194,7 +234,33 @@ class SocketServer:
         # while True:
 
 
-if __name__ == "__main__":
-    server = SocketServer(host, port)
-    server.run_server()
 
+if __name__ == "__main__":
+    # logging.basicConfig(#filename='SocketServer.log',
+    #                     level=logging.DEBUG,
+    #                     format='%(asctime)s %(message)s',
+    #                     datefmt='%Y-%m-%d %H:%M:%S')
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S')
+
+    # get a file handler
+    fh = logging.FileHandler('SocketServer.log')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+
+    # get a stream handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(formatter)
+
+    # add handlers to logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    server = SocketServer(host, port)
+    if server.running:
+        server.run_server()
