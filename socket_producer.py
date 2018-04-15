@@ -5,17 +5,14 @@ import PIL
 import _thread
 import sys
 
-host = "localhost"
-# host = "192.168.0.17"
-port = 60000
+from config.config import *
+
+# host = "localhost"
+# port = 60000
+
 TYPE = 0
-BUFFER_SIZE = 1024
-QUALITY_LOW = 0
-QUALITY_MEDIUM = 1
-QUALITY_HIGH = 2
 
 connection = {}
-
 
 class SocketProducer:
     def __init__(self, host, port, quality):

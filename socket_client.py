@@ -6,17 +6,14 @@ import time
 import vtk
 import vtk.util.numpy_support as vtk_np
 
-host = "localhost"
-# host = "192.168.0.17"
-port = 60000
+from config.config import *
+
+# host = "localhost"
+# port = 60000
+
 connection = None
 TYPE = 1
-BUFFER_SIZE = 1024
 vtk_actor = None
-
-QUALITY_LOW = 0
-QUALITY_MEDIUM = 1
-QUALITY_HIGH = 2
 
 class SocketClient:
     def __init__(self, host, port=60000):
