@@ -7,12 +7,13 @@ import sys
 
 from config.config import *
 
-# host = "localhost"
+# host = "52.237.12.175"
 # port = 60000
 
 TYPE = 0
 
 connection = {}
+
 
 class SocketProducer:
     def __init__(self, host, port, quality):
@@ -25,8 +26,9 @@ class SocketProducer:
         try:
             self.s.connect((host, port))
             print("Connected to server", host, "port", port)
-            self.send(TYPE)
-            self.send(quality)
+            t = struct.pack("I", TYPE)
+            q = struct.pack("I", self.quality)
+            self.s.send(t+q)
             self.status = True
 
         except ConnectionRefusedError as e:
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     # npy_depth = cv2.imread('Gray_Image.jpg', 0)
     cam = cv2.VideoCapture(0)
     while connection[QUALITY_HIGH].status:
-    # while connection[QUALITY_LOW].status or connection[QUALITY_MEDIUM].status or connection[QUALITY_HIGH].status:
+        # while connection[QUALITY_LOW].status or connection[QUALITY_MEDIUM].status or connection[QUALITY_HIGH].status:
         ret, npy_depth = cam.read()
         npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
         h, w = npy_depth.shape
