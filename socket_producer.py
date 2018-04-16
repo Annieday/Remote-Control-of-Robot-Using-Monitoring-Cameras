@@ -7,7 +7,7 @@ import sys
 
 from config.config import *
 
-# host = "52.237.12.175"
+host = "52.237.12.175"
 # port = 60000
 
 TYPE = 0
