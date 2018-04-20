@@ -8,7 +8,7 @@ import vtk.util.numpy_support as vtk_np
 
 from config.config import *
 
-# host = "52.237.12.175"
+host = "52.237.12.175"
 # port = 60000
 
 connection = None
@@ -31,6 +31,7 @@ class SocketClient:
 
             # self.send(TYPE)
             # self.send(QUALITY_HIGH)
+
             self.status = True
 
         except ConnectionRefusedError as e:
@@ -217,14 +218,6 @@ class SingleImage:
 
     def construct_point_cloud(self):
         self.point_cloud = PointCloud(self.raw_img)
-        # npy_z = vtk_np.numpy_to_vtk(point_cloud.z)
-
-        # look_up_table = vtk.vtkLookupTable()
-        # look_up_table.SetTableRange(signal_str.min(), signal_str.max())
-        # look_up_table.SetTableRange(0, 1)
-        # look_up_table.Build()
-
-        # array = look_up_table.MapScalars(npy_z, vtk.VTK_COLOR_MODE_DEFAULT, -1)
 
     def show_img(self):
         cv2.imshow('img', self.img)
@@ -232,32 +225,30 @@ class SingleImage:
 
 
 if __name__ == "__main__":
-    npy_depth1 = np.load('1520468815.npy')
-    npy_depth2 = np.load('1520468813.npy')
+    # npy_depth1 = np.load('1520468815.npy')
+    # npy_depth2 = np.load('1520468813.npy')
     a = 1
     connection = SocketClient(host, port)
     connection.s.settimeout(1)
-    # TODO Add GUI for change view options (3d RGB) and quality
-    # TODO Create renderer, render window, etc for VTK
-    # TODO 1.transform image to point cloud 2.vtk render
     while connection.status:
         single_image = None
         try:
             single_image = SingleImage()
             single_image.receive_img()
             single_image.construct_img()
-            if vtk_actor is None:
-                single_image.point_cloud = PointCloud(npy_depth1)
-                vtk_actor = VTKActorWrapper(single_image.point_cloud.result.reshape(-1, 3), require_transform=True, t_x=180)
-                viz = VTKVisualisation(vtk_actor.actor)
-            else:
-                if a:
-                    single_image.point_cloud = PointCloud(npy_depth1)
-                    a = 0
-                else:
-                    single_image.point_cloud = PointCloud(npy_depth2)
-                    a = 1
-                vtk_actor.update_actor(single_image.point_cloud.result.reshape(-1, 3))
+            # VTK show depth image
+            # if vtk_actor is None:
+            #     single_image.point_cloud = PointCloud(npy_depth1)
+            #     vtk_actor = VTKActorWrapper(single_image.point_cloud.result.reshape(-1, 3), require_transform=True, t_x=180)
+            #     viz = VTKVisualisation(vtk_actor.actor)
+            # else:
+            #     if a:
+            #         single_image.point_cloud = PointCloud(npy_depth1)
+            #         a = 0
+            #     else:
+            #         single_image.point_cloud = PointCloud(npy_depth2)
+            #         a = 1
+            #     vtk_actor.update_actor(single_image.point_cloud.result.reshape(-1, 3))
             single_image.show_img()
         except socket.timeout as e:
             print("Streaming not started")
