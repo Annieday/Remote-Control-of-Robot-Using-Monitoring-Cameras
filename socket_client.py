@@ -8,7 +8,7 @@ import vtk.util.numpy_support as vtk_np
 
 from config.config import *
 
-# host = "localhost"
+# host = "52.237.12.175"
 # port = 60000
 
 connection = None
@@ -24,8 +24,13 @@ class SocketClient:
         try:
             self.s.connect((host, port))
             print("Connected to server", host, "port", port)
-            self.send(TYPE)
-            self.send(QUALITY_HIGH)
+
+            t = struct.pack("I", TYPE)
+            q = struct.pack("I", QUALITY_HIGH)
+            self.s.send(t + q)
+
+            # self.send(TYPE)
+            # self.send(QUALITY_HIGH)
             self.status = True
 
         except ConnectionRefusedError as e:

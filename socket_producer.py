@@ -5,6 +5,7 @@ import PIL
 import _thread
 import sys
 
+from modules.compression.func import blockDCT, blockIDCT, blockZigzag, lengthCoding, normalize, createQ
 from config.config import *
 
 # host = "localhost"
@@ -54,17 +55,29 @@ def compress_img(img, quality=QUALITY_HIGH):
     img = np.reshape(img, (1, -1))[0]
     return img
 
+    # Q = createQ(quality)
+    # encoded_img = blockDCT(img.astype(np.float64),Q.shape,Q)
+    # max_value = np.max(encoded_img)
+    # min_value = np.min(encoded_img)
+    # image = normalize(encoded_img)
+    #
+    # zigzaged_image = blockZigzag(image, Q.shape, Q)
+    #
+    # image = lengthCoding(zigzaged_image)
+    #
+    # return image
+
 
 def send_img(conn, img, h, w):
     try:
         conn.send(h)
         conn.send(w)
         message = compress_img(img)
-        conn.send(message.size)
+        conn.send(len(message))
         # conn.s.send(bytearray([self.L_value]))
         # send the image
         value = bytearray(message)
-        print(h, w, message.size)
+        print(h, w, len(message))
         conn.s.sendall(value)
     except Exception as e:
         print(str(e))
@@ -80,11 +93,15 @@ if __name__ == "__main__":
 
     # npy_depth = cv2.imread('Gray_Image.jpg', 0)
     cam = cv2.VideoCapture(0)
+    cam.set(3,640)
+    cam.set(4,480)
     while connection[QUALITY_HIGH].status:
     # while connection[QUALITY_LOW].status or connection[QUALITY_MEDIUM].status or connection[QUALITY_HIGH].status:
         ret, npy_depth = cam.read()
         npy_depth = cv2.cvtColor(npy_depth, cv2.COLOR_BGR2GRAY)
         h, w = npy_depth.shape
+        # cv2.imshow("test", npy_depth)
+        # cv2.waitKey(5)
         # TODO compress the image, maybe use thread??
         for k, conn in connection.items():
             send_img(conn, npy_depth, h, w)

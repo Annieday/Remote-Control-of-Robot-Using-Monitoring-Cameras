@@ -4,6 +4,7 @@
 # sys.path.insert(0, root)
 import struct
 from modules.color.BColor import BColor
+from modules.compression.func import blockDCT, blockIDCT, blockZigzag, lengthCoding
 from config.config import *
 
 class Channel:
@@ -81,7 +82,7 @@ class Channel:
                 h = struct.unpack("I", h)[0]
                 w = struct.unpack("I", w)[0]
                 size = struct.unpack("I", size)[0]
-                # print(h, w, size, self.quality)
+                print(h, w, size) ############
                 b_data = b''
                 while len(b_data) < size:
                     if len(b_data) + BUFFER_SIZE < size:
@@ -92,6 +93,7 @@ class Channel:
                         temp = self.receive_with_length(size - len(b_data))
                         self.broadcast(clients, temp)
                         b_data += temp
+
 
                 # TODO 3. machine learning based on selected quality that's hard coded
                 # TODO 4. send instruction to robot
