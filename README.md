@@ -51,7 +51,7 @@ cd Downloads/RoboRTS
 
 Then, using the following command to open the configuration of the camera.
 ```bash
-rosrun rqt_reconfiguration <tab>
+rosrun rqt_reconfigure rqt_reconfigure
 ```
 
 Once the configuration pop-up, reduce the exposure down to the lowest. And, now the robot controller module is ready to use.
